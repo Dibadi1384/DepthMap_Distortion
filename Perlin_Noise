@@ -1,0 +1,124 @@
+import cv2
+import numpy as np
+from noise import pnoise2
+
+# Load the Original Image and Depth Map
+original_image_path = "road2.jpg"
+depth_map_path = "road2DP.jpg"
+image_name = "road2"
+
+# Load the original image (BGR by default in OpenCV)
+original_img = cv2.imread(original_image_path)
+if original_img is None:
+    raise FileNotFoundError(f"Original image '{original_image_path}' not found.")
+
+# Convert to RGB for visualization
+original_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
+
+# Load the depth map (grayscale, 0-255)
+depth_map = cv2.imread(depth_map_path, cv2.IMREAD_GRAYSCALE)
+if depth_map is None:
+    raise FileNotFoundError(f"Depth map '{depth_map_path}' not found.")
+
+# Convert depth map to float in [0,1]
+depth_map = depth_map.astype(np.float32) / 255.0
+
+# Distort Image Based on Perlin Noise + Depth
+# Convert the original image to [0,1] float
+original_img_normalized = original_img.astype(np.float32) / 255.0
+
+# Dimensions
+height, width = depth_map.shape
+
+# Perlin noise parameters
+scale = 10            # Controls how "zoomed" the noise is
+octaves = 6           # Number of noise layers
+persistence = 0.5     # Amplitude factor between octaves
+lacunarity = 2.0      # Frequency factor between octaves
+seed = 42
+
+# This parameter sets the maximum distortion in pixels
+max_displacement = 20  
+
+# Prepare an output image
+distorted_img = np.zeros_like(original_img_normalized, dtype=np.float32)
+
+# For visualization of offsets
+offset_x_map = np.zeros((height, width), dtype=np.float32)
+offset_y_map = np.zeros((height, width), dtype=np.float32)
+
+for i in range(height):
+    for j in range(width):
+        # Normalized coordinates for Perlin function
+        x = j / scale
+        y = i / scale
+        
+        # Generate Perlin noise in [-1, 1] for x-offset
+        noise_val_x = pnoise2(
+            x, 
+            y,
+            octaves=octaves,
+            persistence=persistence,
+            lacunarity=lacunarity,
+            repeatx=1024,
+            repeaty=1024,
+            base=seed
+        )
+        
+        # Generate a second Perlin noise in [-1, 1] for y-offset
+        # Shift x and y by some constant so the second noise is different
+        noise_val_y = pnoise2(
+            x + 100, 
+            y + 100,
+            octaves=octaves,
+            persistence=persistence,
+            lacunarity=lacunarity,
+            repeatx=1024,
+            repeaty=1024,
+            base=seed
+        )
+
+        # (1 - depth_map[i, j]) => black=0 => 1, white=1 => 0
+        noise_strength = (1.0 - depth_map[i, j])
+
+        # Scale noise by max displacement
+        disp_x = noise_val_x * noise_strength * max_displacement
+        disp_y = noise_val_y * noise_strength * max_displacement
+
+        # Where do we sample from in the original image?
+        new_x = j + disp_x
+        new_y = i + disp_y
+
+        # Clamp to valid image range
+        new_x = np.clip(new_x, 0, width - 1)
+        new_y = np.clip(new_y, 0, height - 1)
+
+        # Use nearest neighbor (rounding). You can do bilinear for smoother results.
+        new_x_int = int(round(new_x))
+        new_y_int = int(round(new_y))
+        
+        # Get the color from the original image at the displaced coordinate
+        distorted_img[i, j] = original_img_normalized[new_y_int, new_x_int]
+
+        # (Optional) Store the offsets for debug
+        offset_x_map[i, j] = disp_x
+        offset_y_map[i, j] = disp_y
+
+# Convert & Save Results
+
+# Convert from float [0,1] to uint8 [0,255]
+distorted_img_uint8 = (np.clip(distorted_img, 0, 1) * 255).astype(np.uint8)
+
+# Convert RGB to BGR for OpenCV
+distorted_img_bgr = cv2.cvtColor(distorted_img_uint8, cv2.COLOR_RGB2BGR)
+cv2.imwrite(image_name + "_distorted.png", distorted_img_bgr)
+
+# (Optional) Save offset maps to visualize them
+offset_x_map_normalized = (offset_x_map - offset_x_map.min()) / (offset_x_map.max() - offset_x_map.min() + 1e-8)
+offset_y_map_normalized = (offset_y_map - offset_y_map.min()) / (offset_y_map.max() - offset_y_map.min() + 1e-8)
+
+offset_x_bgr = cv2.cvtColor((offset_x_map_normalized * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
+offset_y_bgr = cv2.cvtColor((offset_y_map_normalized * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
+
+cv2.imwrite(image_name + "_offset_x.png", offset_x_bgr)
+cv2.imwrite(image_name + "_offset_y.png", offset_y_bgr)
