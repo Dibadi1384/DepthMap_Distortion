@@ -98,10 +98,6 @@ for i in range(height):
         # Get the color from the original image at the displaced coordinate
         distorted_img[i, j] = original_img_normalized[new_y_int, new_x_int]
 
-        # (Optional) Store the offsets for debug
-        offset_x_map[i, j] = disp_x
-        offset_y_map[i, j] = disp_y
-
 # Convert & Save Results
 
 # Convert from float [0,1] to uint8 [0,255]
