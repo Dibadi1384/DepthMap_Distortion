@@ -85,7 +85,6 @@ for i in range(height):
         disp_x = noise_val_x * noise_strength * max_displacement
         disp_y = noise_val_y * noise_strength * max_displacement
 
-        # Where do we sample from in the original image?
         new_x = j + disp_x
         new_y = i + disp_y
 
@@ -93,7 +92,6 @@ for i in range(height):
         new_x = np.clip(new_x, 0, width - 1)
         new_y = np.clip(new_y, 0, height - 1)
 
-        # Use nearest neighbor (rounding). You can do bilinear for smoother results.
         new_x_int = int(round(new_x))
         new_y_int = int(round(new_y))
         
@@ -113,7 +111,7 @@ distorted_img_uint8 = (np.clip(distorted_img, 0, 1) * 255).astype(np.uint8)
 distorted_img_bgr = cv2.cvtColor(distorted_img_uint8, cv2.COLOR_RGB2BGR)
 cv2.imwrite(image_name + "_distorted.png", distorted_img_bgr)
 
-# (Optional) Save offset maps to visualize them
+# Save offset maps to visualize them
 offset_x_map_normalized = (offset_x_map - offset_x_map.min()) / (offset_x_map.max() - offset_x_map.min() + 1e-8)
 offset_y_map_normalized = (offset_y_map - offset_y_map.min()) / (offset_y_map.max() - offset_y_map.min() + 1e-8)
 
